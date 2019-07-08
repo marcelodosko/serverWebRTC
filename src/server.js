@@ -86,7 +86,14 @@ wss.on('connection', ws => {
         if (users[data.otherUsername] != null) {
           sendTo(users[data.otherUsername], { type: 'close' })
         }
-
+        break
+      case 'getJson':
+      console.log('llego', data)
+        fs.readFile(`./tests/${data.name}.json`, (err, data) => {
+          err && console.log('error', err)
+           const loremIpsum = JSON.parse(data)
+           sendTo(ws, { type: 'sendJson', filejson: loremIpsum})
+        })
         break
 
       default:

@@ -1,4 +1,6 @@
-const ws = new WebSocket('ws://192.168.0.27:3001')
+// import fs from 'fs'
+
+const ws = new WebSocket('ws://192.168.0.28:3001')
 
 ws.onopen = () => {
   console.log('Connected to the signaling server')
@@ -9,10 +11,8 @@ ws.onerror = err => {
 }
 
 ws.onmessage = msg => {
-  console.log('Got message', msg.data)
-
   const data = JSON.parse(msg.data)
-
+  console.log('Got Message', data)
   switch (data.type) {
     case 'login':
       handleLogin(data.success)
@@ -29,6 +29,8 @@ ws.onmessage = msg => {
     case 'close':
       handleClose()
       break
+    case 'sendJson':
+      sendJson(data.filejson)
     default:
       break
   }
@@ -37,6 +39,8 @@ ws.onmessage = msg => {
 let connection = null
 let name = null
 let otherUsername = null
+let channel = null
+let usernameLocal
 
 const sendMessage = message => {
   if (otherUsername) {
@@ -46,52 +50,60 @@ const sendMessage = message => {
   ws.send(JSON.stringify(message))
 }
 
+const sendJson = fileJson => {
+  fileJson.test.forEach(e => channel.send(e))
+  
+}
+
 document.querySelector('div#call').style.display = 'none'
 
 document.querySelector('button#login').addEventListener('click', event => {
-  username = document.querySelector('input#username').value
+  usernameLocal = document.querySelector('input#username').value
 
-  if (username.length < 0) {
-    alert('Please enter a username 🙂')
+  if (usernameLocal.length < 0) {
+    alert('Please enter a username')
     return
   }
 
   sendMessage({
     type: 'login',
-    username: username
+    username: usernameLocal
   })
 })
 
 const handleLogin = async success => {
   if (success === false) {
-    alert('😞 Username already taken')
+    alert('Username already taken')
   } else {
     document.querySelector('div#login').style.display = 'none'
     document.querySelector('div#call').style.display = 'block'
 
-    let localStream
-    try {
-      localStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true
-      })
-    } catch (error) {
-      alert(`${error.name}`)
-      console.log(error)
-    }
-
-    document.querySelector('video#local').srcObject = localStream
-
     const configuration = {
-      iceServers: [{ url: 'stun:stun2.1.google.com:19302' }]
+      iceServers: [{ url: 'stun:stun2.1.google.com:19302' }],
     }
 
     connection = new RTCPeerConnection(configuration)
 
-    connection.addStream(localStream)
+    channel = connection.createDataChannel({ optional: [{ RtpDataChannels: true}] })
 
-    connection.onaddstream = event => {
-      document.querySelector('video#remote').srcObject = event.stream
+    connection.ondatachannel = event => {
+      event.channel.onmessage = event => {
+        console.log('event.channel.onmessage', event.data);
+
+    };
+
+    event.channel.onopen = event => {
+      console.log('event.channel.onopen', event)
+        channel.send('RTCDataChannel opened.', event);
+    };
+    
+    event.channel.onclose = event => {
+        console.log('RTCDataChannel closed.', event);
+    };
+    
+    event.channel.onerror = event => {
+        console.error(event);
+    };
     }
 
     connection.onicecandidate = event => {
@@ -104,6 +116,12 @@ const handleLogin = async success => {
     }
   }
 }
+document.querySelector('button#send-message').addEventListener('click', () => {
+  const jsonName = document.querySelector('input#jsonname').value
+  ws.send(JSON.stringify({ username: usernameLocal, type: 'getJson', name: jsonName }))
+
+  // channel.send('test mensaje')
+})
 
 document.querySelector('button#call').addEventListener('click', () => {
   const callToUsername = document.querySelector('input#username-to-call').value
