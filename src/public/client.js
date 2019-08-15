@@ -1,6 +1,6 @@
 // import fs from 'fs'
 
-const ws = new WebSocket('ws://192.168.0.28:3001')
+const ws = new WebSocket('ws://10.1.1.223:3001')
 
 ws.onopen = () => {
   console.log('Connected to the signaling server')
@@ -50,9 +50,10 @@ const sendMessage = message => {
   ws.send(JSON.stringify(message))
 }
 
-const sendJson = fileJson => {
-  fileJson.test.forEach(e => channel.send(e))
-  
+const sendJson = async fileJson => {
+  let cantMjes = fileJson.test.length
+  channel.send(cantMjes)
+  fileJson.test.forEach(e => channel.send(e)) 
 }
 
 document.querySelector('div#call').style.display = 'none'
@@ -84,6 +85,8 @@ const handleLogin = async success => {
 
     connection = new RTCPeerConnection(configuration)
 
+    console.log('new RTCPeerConnection connection', connection)
+
     channel = connection.createDataChannel({ optional: [{ RtpDataChannels: true}] })
 
     connection.ondatachannel = event => {
@@ -107,6 +110,7 @@ const handleLogin = async success => {
     }
 
     connection.onicecandidate = event => {
+      console.log('event.candidate', event.candidate)
       if (event.candidate) {
         sendMessage({
           type: 'candidate',
