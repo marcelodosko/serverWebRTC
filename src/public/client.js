@@ -1,7 +1,10 @@
-// import fs from 'fs'
+const ws = new WebSocket('ws://192.168.0.31:3501')
 
-const ws = new WebSocket('ws://10.1.1.223:3001')
+let connection = null
+let otherUsername = 'A'
+let channel = null
 
+// WebSocket configuration
 ws.onopen = () => {
   console.log('Connected to the signaling server')
 }
@@ -26,9 +29,6 @@ ws.onmessage = msg => {
     case 'candidate':
       handleCandidate(data.candidate)
       break
-    case 'close':
-      handleClose()
-      break
     case 'sendJson':
       sendJson(data.filejson)
     default:
@@ -36,49 +36,18 @@ ws.onmessage = msg => {
   }
 }
 
-let connection = null
-let name = null
-let otherUsername = null
-let channel = null
-let usernameLocal
-
+// Send messages through webSocket
 const sendMessage = message => {
   if (otherUsername) {
     message.otherUsername = otherUsername
   }
-
   ws.send(JSON.stringify(message))
 }
-
-const sendJson = async fileJson => {
-  let cantMjes = fileJson.test.length
-  channel.send(cantMjes)
-  fileJson.test.forEach(e => channel.send(e)) 
-}
-
-document.querySelector('div#call').style.display = 'none'
-
-document.querySelector('button#login').addEventListener('click', event => {
-  usernameLocal = document.querySelector('input#username').value
-
-  if (usernameLocal.length < 0) {
-    alert('Please enter a username')
-    return
-  }
-
-  sendMessage({
-    type: 'login',
-    username: usernameLocal
-  })
-})
 
 const handleLogin = async success => {
   if (success === false) {
     alert('Username already taken')
   } else {
-    document.querySelector('div#login').style.display = 'none'
-    document.querySelector('div#call').style.display = 'block'
-
     const configuration = {
       iceServers: [{ url: 'stun:stun2.1.google.com:19302' }],
     }
@@ -92,25 +61,22 @@ const handleLogin = async success => {
     connection.ondatachannel = event => {
       event.channel.onmessage = event => {
         console.log('event.channel.onmessage', event.data);
+      }
 
-    };
-
-    event.channel.onopen = event => {
-      console.log('event.channel.onopen', event)
-        channel.send('RTCDataChannel opened.', event);
-    };
-    
-    event.channel.onclose = event => {
-        console.log('RTCDataChannel closed.', event);
-    };
-    
-    event.channel.onerror = event => {
-        console.error(event);
-    };
+      event.channel.onopen = event => {
+          channel.send('RTCDataChannel opened.', event);
+      }
+      
+      event.channel.onclose = event => {
+          console.log('RTCDataChannel closed.', event);
+      }
+      
+      event.channel.onerror = event => {
+          console.error(event)
+      }
     }
 
     connection.onicecandidate = event => {
-      console.log('event.candidate', event.candidate)
       if (event.candidate) {
         sendMessage({
           type: 'candidate',
@@ -120,38 +86,6 @@ const handleLogin = async success => {
     }
   }
 }
-document.querySelector('button#send-message').addEventListener('click', () => {
-  const jsonName = document.querySelector('input#jsonname').value
-  ws.send(JSON.stringify({ username: usernameLocal, type: 'getJson', name: jsonName }))
-
-  // channel.send('test mensaje')
-})
-
-document.querySelector('button#call').addEventListener('click', () => {
-  const callToUsername = document.querySelector('input#username-to-call').value
-
-  if (callToUsername.length === 0) {
-    alert('Enter a username 😉')
-    return
-  }
-
-  otherUsername = callToUsername
-
-  connection.createOffer(
-    offer => {
-      sendMessage({
-        type: 'offer',
-        offer: offer
-      })
-
-      connection.setLocalDescription(offer)
-    },
-    error => {
-      alert('Error when creating an offer')
-      console.error(error)
-    }
-  )
-})
 
 const handleOffer = (offer, username) => {
   otherUsername = username
@@ -179,17 +113,36 @@ const handleCandidate = candidate => {
   connection.addIceCandidate(new RTCIceCandidate(candidate))
 }
 
-document.querySelector('button#close-call').addEventListener('click', () => {
-  sendMessage({
-    type: 'close'
-  })
-  handleClose()
-})
-
-const handleClose = () => {
-  otherUsername = null
-  document.querySelector('video#remote').src = null
-  connection.close()
-  connection.onicecandidate = null
-  connection.onaddstream = null
+// When the package JSON arrive at the client through WebSocket,
+// WebRTC starts to transfer messages to device app 
+const sendJson = async fileJson => {
+  const cantMjes = fileJson.test.length
+  channel.send(cantMjes)
+  fileJson.test.forEach(e => channel.send(e)) 
 }
+
+const startTest = () =>  ws.send(JSON.stringify({ type: 'startTestWebRTC' }))
+
+document.querySelector('button#run-test').addEventListener('click', () => {
+  
+  sendMessage({
+    type: 'login',
+    username:'B'
+  })
+
+  setTimeout(() => {
+    connection.createOffer(
+      offer => {
+        sendMessage({
+          type: 'offer',
+          offer: offer
+        })
+        connection.setLocalDescription(offer)
+      },
+      error => console.error(error)
+    )
+  startTest()
+  },
+    2500
+  )
+})

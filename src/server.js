@@ -12,12 +12,13 @@ import fs from 'fs'
 import FileService from './fileService'
 // import page from './web/index.html'
 const WebSocket = require('ws')
-const wss = new WebSocket.Server({ port: 3001 })
+const wss = new WebSocket.Server({ port: 3501 })
 const users = {}
 
 const app = express()
-const port = process.env.PORT || 3000
+const port = process.env.PORT || 3500
 const router = express.Router()
+let nameJson = 1000
 
 app.use(bodyParser.urlencoded({ extended: false }))
 app.use(bodyParser.json())
@@ -32,16 +33,16 @@ const sendTo = (ws, message) => {
 let cpu = {}
 
 const getRunningApp = () => {
-        const command = `adb shell top | grep com.livestreamapp`;
-        console.log('🗒  [ADB - Listing processes]:', command);
+        const command = `adb shell top | grep com.livestreama+`;
+        console.log('🗒 [ADB - Listing processes]:', command);
         // return spawn('sh', ['-c', command]);
-        return exec(`adb shell top | grep com.livestreamapp`)
+        return exec(command)
 }
-const listenAndSaveCPUusage = (fileName) => {
+const listenAndSaveCPUusage = (fileName, folderName) => {
       console.log('👂 [ADB - Listening processes]');
       cpu.stdout.on('data', data => {
           console.log('📝 [ADB - Writing outputs]');
-          const fileService = new FileService('livestreamapp', fileName);
+          const fileService = new FileService(folderName, fileName);
           fileService._writeFile(data);
       })
       cpu.stderr.on('data', function(data) {
@@ -76,19 +77,36 @@ const listenAndSaveCPUusage = (fileName) => {
     }
 }
 
-  const closeApp = () => {
-        const command = 'adb shell pm clear com.livestreamapp';
-        exec(command, stdout => {
-            console.log('✳️  [ADB - App closed.]')
-        });
-    }
-
- const closeCPUSocket = () => {
-      console.log('kill')
-      setTimeout(() => kill(cpu.pid), 5000)
-      // console.log('paso puto')
-      // closeApp()
+const closeCPUSocket = (techType) => {
+  console.log('kill')
+  setTimeout(() => kill(cpu.pid), 5000)
+  if (nameJson <= 10000) {
+    techType === 'webrtc'
+    ? setTimeout(() => startTest(users['B'], techType), 5000)
+    : setTimeout(() => startTest(users['A'], techType), 5000)
   }
+}
+
+const startTest = (ws, techType) => {
+  cpu = getRunningApp()
+  listenAndSaveCPUusage(`${nameJson}`, techType)
+  fs.readFile(`./tests/${nameJson}.json`, (err, data) => {
+    err && console.log('error', err)
+    const loremIpsum = JSON.parse(data)
+    if (techType === 'webrtc'){  
+      setTimeout(() => sendTo(ws, { type: 'sendJson', filejson: loremIpsum}), 5000)
+    } else {
+      setTimeout(() => sendLoremIpsun(ws, loremIpsum), 5000)
+    }
+  })
+  nameJson += 250
+}
+
+const sendLoremIpsun = (ws, loremIpsum) => {
+  const cantMjes = loremIpsum.test.length
+  sendTo(ws, { type: 'setCantMjes', cantMjes})
+  loremIpsum.test.forEach(e => sendTo(ws, { type: 'loremIpsum', message: e}))
+}
 
 wss.on('connection', ws => {
   console.log('User connected')
@@ -153,19 +171,16 @@ wss.on('connection', ws => {
           sendTo(users[data.otherUsername], { type: 'close' })
         }
         break
-      case 'getJson':
-        cpu = getRunningApp()
-        listenAndSaveCPUusage(data.name)
-        fs.readFile(`./tests/${data.name}.json`, (err, data) => {
-          err && console.log('error', err)
-           const loremIpsum = JSON.parse(data)
-           setTimeout(() => sendTo(ws, { type: 'sendJson', filejson: loremIpsum}), 5000)
-        })
+      case 'startTestWebSocket':
+        startTest(users['A'], 'websocket')
         break
-        case 'stopADB':
-          console.log('Stop ADB')
-          closeCPUSocket()
-          break
+      case 'startTestWebRTC':
+        startTest(users['B'], 'webrtc')
+        break
+      case 'stopADB':
+        console.log('Stop ADB')
+        closeCPUSocket(data.testType)
+        break
           
       default:
         sendTo(ws, {
